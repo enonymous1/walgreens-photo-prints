@@ -1,9 +1,16 @@
-"""Web front-end tests, all in demo mode (fictional data, no network)."""
+"""Web front-end tests, all in demo mode (fictional data, no network).
+
+Flask is an optional ``[web]`` extra, so these tests skip (rather
+than error) on a library-only install. CI installs ``.[dev,web]``,
+so they run there; see README Local Development.
+"""
 
 import io
 import re
 
 import pytest
+
+pytest.importorskip("flask")
 
 from walgreens_photo_prints.demo import SAMPLE_ORDER_JSON
 from walgreens_photo_prints.webapp import create_app

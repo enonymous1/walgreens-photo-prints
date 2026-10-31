@@ -14,9 +14,8 @@ and never committed; the Pages workflow builds it fresh.
 import argparse
 import re
 import shutil
+import sys
 from pathlib import Path
-
-from walgreens_photo_prints.webapp import create_app
 
 ROUTES = [
     ("/", "index.html"),
@@ -68,7 +67,14 @@ def freeze_page(html):
 
 def build_freeze(output_dir):
     """Build the frozen demo site into ``output_dir`` and return its file list."""
-    app = create_app(demo=True)
+    try:
+        from walgreens_photo_prints.webapp import create_app
+
+        app = create_app(demo=True)
+    except ImportError:
+        raise RuntimeError(
+            'Flask is required to freeze the demo site. Install it with: pip install -e ".[web]"'
+        ) from None
     # Guardrail: the frozen app must be the demo app, never a live one.
     assert app.config["WPP_DEMO"], "Freeze requires the demo app."
     output = Path(output_dir)
@@ -110,7 +116,12 @@ def main():
     parser = argparse.ArgumentParser(description="Freeze the demo web app to a static site.")
     parser.add_argument("--output", default="freeze-site", help="Output directory.")
     args = parser.parse_args()
-    for filename in build_freeze(args.output):
+    try:
+        filenames = build_freeze(args.output)
+    except RuntimeError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        raise SystemExit(1) from None
+    for filename in filenames:
         print(filename)
 
 

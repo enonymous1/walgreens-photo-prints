@@ -1,7 +1,16 @@
-"""Freeze tests: demo-only output, disabled forms, no secrets."""
+"""Freeze tests: demo-only output, disabled forms, no secrets.
+
+Flask is an optional ``[web]`` extra, so these tests skip (rather
+than error) on a library-only install. CI installs ``.[dev,web]``,
+so they run there; see README Local Development.
+"""
 
 import sys
 from pathlib import Path
+
+import pytest
+
+pytest.importorskip("flask")
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
 

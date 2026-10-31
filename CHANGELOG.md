@@ -1,5 +1,18 @@
 # Changelog
 
+## 1.3.1 — 2026-10-31
+
+Fix for a v1.3.0 packaging miss, found by a bare `pytest -q`
+run: Flask is an optional `[web]` extra, but the web and freeze
+tests imported it unconditionally, so a library-only install
+failed with 2 failures and 7 errors (the 73 core tests passed).
+Now the web/freeze tests skip cleanly when Flask is absent,
+CI installs `.[dev,web]` so they actually run there instead
+of being silently skipped, the freeze script reports a plain
+install instruction instead of a traceback when Flask is
+missing, and README Local Development installs `.[dev,web]`
+for the full suite.
+
 ## 1.3.0 — 2026-10-31
 
 Flask front-end plus a Pages freeze demo. The library and CLI are

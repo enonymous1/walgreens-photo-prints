@@ -74,13 +74,16 @@ On Windows (PowerShell):
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
-pip install -e ".[dev]"
+pip install -e ".[dev,web]"
 pytest
-ruff check src tests
-ruff format --check src tests
+ruff check src tests scripts
+ruff format --check src tests scripts
 ```
 
 On macOS/Linux, activate with `source .venv/bin/activate` instead.
+With only `.[dev]` (no Flask), the web/freeze test files skip
+(9 tests) and the 73 core tests pass — pytest reports this as
+73 passed, 2 skipped. `.[dev,web]` runs the full 82.
 Run a single test file with `pytest tests/test_client.py -q`. All
 tests use mocked responses modelled on the API reference examples; no
 test touches the live API, so the suite is safe to run anywhere.
