@@ -186,7 +186,7 @@ def test_retry_after_http_date_parsed(make_client):
 
 def test_owned_client_session_is_closed(config, monkeypatch):
     session = FakeSession([FakeResponse({"products": []})])
-    monkeypatch.setattr("walgreens_photo_prints.client.requests.Session", lambda: session)
+    monkeypatch.setattr("walgreens_photo_prints.transport.requests.Session", lambda: session)
     with WalgreensClient(config) as client:
         client.list_products()
     assert session.closed

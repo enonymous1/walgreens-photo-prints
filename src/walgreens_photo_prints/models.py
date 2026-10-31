@@ -297,6 +297,21 @@ class CouponResult:
 
 
 @dataclass(frozen=True)
+class ProductQty:
+    """One product and its quantity for coupon/store payloads."""
+
+    product_id: str
+    qty: str = "1"
+
+    def __post_init__(self):
+        if not self.product_id or not str(self.product_id).strip():
+            raise ValueError("ProductQty product_id must not be empty.")
+
+    def to_payload(self):
+        return {"productId": str(self.product_id), "qty": str(self.qty)}
+
+
+@dataclass(frozen=True)
 class ImageDetail:
     """One uploaded image in an order, with its print quantity."""
 

@@ -20,6 +20,7 @@ from ._version import __version__ as VERSION
 from .client import WalgreensClient
 from .config import Config, ConfigError
 from .errors import WalgreensApiError
+from .models import ProductQty
 from .upload import build_upload_url, upload_image_for_credentials
 
 
@@ -52,7 +53,7 @@ def _product_qty_details(data):
     for entry in data:
         if not isinstance(entry, dict) or "productId" not in entry or "qty" not in entry:
             raise ValueError(f"Each product detail needs productId and qty, got {entry!r}.")
-        details.append({"productId": str(entry["productId"]), "qty": str(entry["qty"])})
+        details.append(ProductQty(str(entry["productId"]), str(entry["qty"])))
     return details
 
 

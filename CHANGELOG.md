@@ -1,5 +1,43 @@
 # Changelog
 
+## 1.2.0 — 2026-10-31
+
+Stage 3 of the staff review: architecture, with no behaviour
+change for existing callers. Dict and attribute-style product
+inputs still work; `ProductQty` is now the preferred form.
+
+Added:
+
+- `transport.py`: a `Transport` protocol plus a
+  `RequestsTransport` implementation. `WalgreensClient` accepts
+  `transport=...` (precedence over the legacy `session=...`),
+  so the client is testable without subclassing a real
+  `requests.Session`, and a future async transport is additive.
+- `models.ProductQty`: typed coupon/store product input, with
+  `to_payload()`. The CLI now parses product-details JSON into
+  `ProductQty` objects, so the CLI, client, and tests share one
+  typed shape instead of three dict parsers.
+- `client.API_VERSION` and `client.ENDPOINTS`: the six paths
+  are built from one version constant, so a v4 migration is a
+  one-line change plus a changelog entry.
+- Debug logging in `_post` (method, path, status only; payloads
+  are never logged, since they contain the API key).
+
+Changed:
+
+- `RATE_LIMITS_PER_MINUTE` renamed to
+  `DOCUMENTED_RATE_LIMITS_PER_MINUTE` to make clear the limits
+  are documented, not enforced; the old name remains as an
+  alias for backwards compatibility.
+
+Not changed, deliberately:
+
+- `Config` still requires HTTPS base URLs, so the local
+  HTTP-server test exercises `RequestsTransport` directly
+  rather than weakening the client to accept HTTP.
+- No automatic retry: submit is not idempotent (see the client
+  module docstring).
+
 ## 1.1.0 — 2026-10-31
 
 Staff-review pass, applied in the review's suggested order (P0/P1

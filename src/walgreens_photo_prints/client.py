@@ -35,15 +35,30 @@ from .models import (
     ImageDetail,
     OrderProduct,
     OrderSubmission,
+    ProductQty,
     UploadCredentials,
     parse_order_statuses,
     parse_products,
     parse_stores,
 )
+from .transport import RequestsTransport
 
 logger = logging.getLogger(__name__)
 
-RATE_LIMITS_PER_MINUTE = {
+API_VERSION = "v3"
+
+ENDPOINTS = {
+    "creds": f"/api/photo/creds/{API_VERSION}",
+    "products": f"/api/photo/products/{API_VERSION}",
+    "coupon": f"/api/photo/order/coupon/{API_VERSION}",
+    "stores": f"/api/photo/store/{API_VERSION}",
+    "submit": f"/api/photo/order/submit/{API_VERSION}",
+    "status": f"/api/photo/order/status/{API_VERSION}",
+}
+
+# Documented limits only: this client does not enforce them.
+# Callers that loop must pace themselves to these values.
+DOCUMENTED_RATE_LIMITS_PER_MINUTE = {
     "creds": 300,
     "products": 300,
     "coupon": 100,
@@ -52,20 +67,34 @@ RATE_LIMITS_PER_MINUTE = {
     "status": 300,
 }
 
+# Backwards-compatible alias for the pre-1.2.0 name.
+RATE_LIMITS_PER_MINUTE = DOCUMENTED_RATE_LIMITS_PER_MINUTE
+
 MAX_DISTINCT_IMAGES = 200
 MAX_QTY_PER_IMAGE = 20
 
 
 class WalgreensClient:
-    """A session-bound client for one Walgreens affiliate account."""
+    """A session-bound client for one Walgreens affiliate account.
 
-    def __init__(self, config, session=None):
+    ``session`` (a ``requests``-compatible session) is kept for
+    backwards compatibility; ``transport`` takes precedence when
+    both are given. A transport/session passed in belongs to the
+    caller and is never closed by this client; one created here
+    is closed by ``close()`` / context-manager exit.
+    """
+
+    def __init__(self, config, session=None, transport=None):
         if isinstance(config, Config):
             self.config = config
         else:  # pragma: no cover - defensive, tests use Config
             raise TypeError("config must be a Config instance")
-        self._session = session or requests.Session()
-        self._owns_session = session is None
+        if transport is not None:
+            self._transport = transport
+        elif session is not None:
+            self._transport = RequestsTransport(session)
+        else:
+            self._transport = RequestsTransport()
 
     def __enter__(self):
         return self
@@ -75,8 +104,7 @@ class WalgreensClient:
         return False
 
     def close(self):
-        if self._owns_session:
-            self._session.close()
+        self._transport.close()
 
     # -- internals -----------------------------------------------------
 
@@ -96,7 +124,7 @@ class WalgreensClient:
             "User-Agent": f"walgreens-photo-prints/{__version__}",
         }
         try:
-            response = self._session.post(
+            response = self._transport.post(
                 url, headers=headers, json=payload, timeout=self.config.timeout
             )
         except requests.RequestException as exc:
@@ -159,7 +187,7 @@ class WalgreensClient:
         payload = self._base_payload(app_ver, dev_inf)
         payload["platform"] = platform or self.config.platform
         payload["transaction"] = "photocheckoutv2"
-        data = self._post("/api/photo/creds/v3", payload)
+        data = self._post(ENDPOINTS["creds"], payload)
         return UploadCredentials.from_dict(data)
 
     def list_products(self, *, product_group_id=None, app_ver=None, dev_inf=None):
@@ -173,7 +201,7 @@ class WalgreensClient:
         if product_group_id is not None:
             payload["productGroupId"] = product_group_id
         payload["act"] = "getphotoprods"
-        data = self._post("/api/photo/products/v3", payload)
+        data = self._post(ENDPOINTS["products"], payload)
         return parse_products(data)
 
     def validate_coupon(self, coupon_code, product_details, *, app_ver=None, dev_inf=None):
@@ -190,7 +218,7 @@ class WalgreensClient:
             _product_qty_payload(d)
             for d in _require_non_empty_list(product_details, "productDetails")
         ]
-        data = self._post("/api/photo/order/coupon/v3", payload)
+        data = self._post(ENDPOINTS["coupon"], payload)
         return CouponResult.from_dict(data)
 
     def find_stores(self, latitude, longitude, product_details, *, app_ver=None, dev_inf=None):
@@ -212,7 +240,7 @@ class WalgreensClient:
             _product_qty_payload(d)
             for d in _require_non_empty_list(product_details, "productDetails")
         ]
-        data = self._post("/api/photo/store/v3", payload)
+        data = self._post(ENDPOINTS["stores"], payload)
         return parse_stores(data)
 
     def submit_order(
@@ -264,7 +292,7 @@ class WalgreensClient:
             app_ver=app_ver,
             dev_inf=dev_inf,
         )
-        data = self._post("/api/photo/order/submit/v3", payload)
+        data = self._post(ENDPOINTS["submit"], payload)
         return OrderSubmission.from_dict(data)
 
     def build_submit_payload(
@@ -346,7 +374,7 @@ class WalgreensClient:
         payload = self._base_payload(app_ver, dev_inf)
         payload["orders"] = [str(o) for o in order_ids]
         payload["act"] = "orderstatus"
-        data = self._post("/api/photo/order/status/v3", payload)
+        data = self._post(ENDPOINTS["status"], payload)
         return parse_order_statuses(data)
 
 
@@ -397,6 +425,14 @@ def _validate_lat_lon(latitude, longitude):
 
 
 def _product_qty_payload(detail):
+    """Normalise a coupon/store product entry to its payload.
+
+    Accepts a ``ProductQty`` (preferred), a dict, or an object
+    with ``product_id``/``qty`` attributes (kept for backwards
+    compatibility with the pre-1.2.0 duck-typed input).
+    """
+    if isinstance(detail, ProductQty):
+        return detail.to_payload()
     if isinstance(detail, dict):
         product_id = detail.get("productId")
         qty = detail.get("qty")

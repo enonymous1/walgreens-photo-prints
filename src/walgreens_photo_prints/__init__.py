@@ -13,6 +13,7 @@ from .models import (
     OrderSubmission,
     PhotoStore,
     Product,
+    ProductQty,
     UploadCredentials,
 )
 from .upload import build_upload_url, upload_image, upload_image_for_credentials
@@ -27,6 +28,7 @@ __all__ = [
     "OrderSubmission",
     "PhotoStore",
     "Product",
+    "ProductQty",
     "UploadCredentials",
     "WalgreensApiError",
     "WalgreensClient",

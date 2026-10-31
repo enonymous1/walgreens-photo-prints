@@ -5,4 +5,4 @@ package ``__init__`` and the CLI import it from here. Never duplicate
 the version string in another file.
 """
 
-__version__ = "1.1.0"
+__version__ = "1.2.0"
