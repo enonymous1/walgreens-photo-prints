@@ -1,0 +1,13 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Order submitted</h2>
+<table>
+<tr><th>Vendor order ID</th><th>Status</th></tr>
+<tr><td>{{ result.vendor_order_id or "" }}</td><td>{{ result.status or "" }}</td></tr>
+</table>
+{% if demo %}
+<p>Demo mode: this is a fictional order. No real order was placed.</p>
+{% else %}
+<p>Check the order status on the <a href="/status">Status</a> page using the vendor order ID above.</p>
+{% endif %}
+{% endblock %}

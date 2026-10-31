@@ -1,0 +1,14 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Photo prints, from the browser</h2>
+<p>This is a front-end for the Walgreens Native Photo Prints API v3 client. Browse products, find stores, validate a coupon, upload an image, submit an order, and check its status.</p>
+<p>Submit is a two-step flow everywhere: first a preview with the API key redacted, then a second confirmation with the customer terms action checked. Without both, nothing is submitted.</p>
+<ul>
+<li><a href="/products">Products</a> — list products and prices.</li>
+<li><a href="/stores">Stores</a> — find photo stores near a location.</li>
+<li><a href="/coupon">Coupon</a> — validate a coupon against a cart.</li>
+<li><a href="/upload">Upload</a> — upload one image via fresh credentials.</li>
+<li><a href="/submit">Submit</a> — preview, then submit a real order (live mode only).</li>
+<li><a href="/status">Status</a> — check orders by vendor order ID.</li>
+</ul>
+{% endblock %}

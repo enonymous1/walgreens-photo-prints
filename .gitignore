@@ -8,5 +8,6 @@ venv/
 !.env.example
 build/
 dist/
+freeze-site/
 .pytest_cache/
 .ruff_cache/

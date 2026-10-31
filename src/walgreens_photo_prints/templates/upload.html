@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Upload</h2>
+<form method="post" action="/upload" enctype="multipart/form-data">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>Image file <input type="file" name="image" required></label>
+<button type="submit">Upload image</button>
+</form>
+{% if upload_url is not none %}
+<p>Upload status: {{ status_code }}</p>
+<p>Upload URL:</p>
+<pre>{{ upload_url }}</pre>
+<p class="banner live-banner">This URL contains a signed credential. Do not share it. Uploaded files are not accessible afterwards, per the API reference.</p>
+{% if demo %}
+<p>Demo mode: the file was discarded and no upload was made. This is the fictional URL the demo credentials would produce.</p>
+{% endif %}
+{% endif %}
+{% endblock %}

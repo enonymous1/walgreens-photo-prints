@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Submit preview — nothing has been submitted yet</h2>
+<p>Review the payload below. The API key is redacted. To place the order, check both boxes and submit again.</p>
+<pre>{{ payload | tojson(indent=2) }}</pre>
+<form method="post" action="/submit">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<input type="hidden" name="first_name" value="{{ fields.first_name }}">
+<input type="hidden" name="last_name" value="{{ fields.last_name }}">
+<input type="hidden" name="phone" value="{{ fields.phone }}">
+<input type="hidden" name="email" value="{{ fields.email }}">
+<input type="hidden" name="store_num" value="{{ fields.store_num }}">
+<input type="hidden" name="promise_time" value="{{ fields.promise_time }}">
+<input type="hidden" name="coupon_code" value="{{ fields.coupon_code }}">
+<input type="hidden" name="publisher_id" value="{{ fields.publisher_id }}">
+<input type="hidden" name="aff_notes" value="{{ fields.aff_notes }}">
+<input type="hidden" name="product_details" value="{{ product_details }}">
+<label><input type="checkbox" name="confirm" value="1" required> Confirm: place this order</label>
+<label><input type="checkbox" name="accept_terms" value="1" required> The customer took the required action on the terms element for this order</label>
+<button type="submit">Place order</button>
+</form>
+{% if demo %}
+<p>Demo mode: confirming returns a fictional order and places no real order.</p>
+{% endif %}
+{% endblock %}

@@ -95,6 +95,38 @@ Configuration precedence, highest first: CLI flags, environment
 variables, then the `.env` file (which never overwrites the
 environment). Importing the package makes no network calls.
 
+## Web front-end
+
+Flask is an optional extra; the core library does not require it:
+
+```powershell
+pip install -e ".[web]"
+walgreens-prints serve --demo
+```
+
+`serve` binds to `127.0.0.1:5000` by default (`--host`/`--port`
+override it). Demo mode uses fictional data only and makes no
+network call. Live mode (`walgreens-prints serve`, no `--demo`)
+builds a real client from the environment, with credentials
+server-side only: pages for products, stores, coupon, upload,
+two-step submit (redacted preview, then confirm + terms action),
+and status. Live mode has no login, so run it locally only; do
+not expose it publicly.
+
+## Pages freeze (demo only)
+
+`scripts/freeze.py` renders the demo app with the Flask test
+client into `freeze-site/` (gitignored, never committed), with
+forms disabled and a static-demo banner. The Pages workflow
+(`.github/workflows/pages-freeze.yml`) builds and deploys that
+output on push to `main`, after the one-time Settings → Pages →
+Source: GitHub Actions activation. The frozen site is a demo
+only: it cannot take arbitrary input, upload a file, or place
+an order. The freeze script builds its own demo app and takes
+no credentials argument, so real data cannot be frozen by
+accident. There is no live Pages app, because Pages is static
+and cannot hold the API key.
+
 ## Usage
 
 ```powershell
@@ -199,6 +231,8 @@ collected the terms action but does not supply the copy.
 
 There is no server to deploy and no PyPI release. Deployment means:
 push to GitHub, let CI go green, run the sandbox smoke test, then tag.
+The Pages freeze is a demo only (see "Pages freeze (demo only)"
+above); it is not a deployment of the live app.
 
 1. Check `enonymous1/walgreens-photo-prints` signed in; create an
    empty public repository if it does not exist.

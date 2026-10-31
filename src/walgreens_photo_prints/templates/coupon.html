@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Coupon</h2>
+<form method="post" action="/coupon">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>Coupon code <input type="text" name="code" value="{{ code }}" required></label>
+<label>Product details (JSON) <textarea name="product_details" rows="4" required>{{ product_details }}</textarea></label>
+<p>Product details format: <code>[{"productId": "8420005", "qty": "10"}]</code></p>
+<button type="submit">Validate coupon</button>
+</form>
+{% if result is not none %}
+<table>
+<tr><th>Status</th><th>Total</th><th>Discount</th><th>New subtotal</th></tr>
+<tr><td>{{ result.status or "" }}</td><td>{{ result.order_total_price }}</td><td>{{ result.order_discount_price }}</td><td>{{ result.new_subtotal }}</td></tr>
+</table>
+<p>Validate a coupon before adding it to a submit request.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Stores</h2>
+<form method="post" action="/stores">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>Latitude <input type="text" name="latitude" value="{{ latitude }}" required></label>
+<label>Longitude <input type="text" name="longitude" value="{{ longitude }}" required></label>
+<label>Product details (JSON) <textarea name="product_details" rows="4" required>{{ product_details }}</textarea></label>
+<p>Product details format: <code>[{"productId": "8420005", "qty": "10"}]</code></p>
+<button type="submit">Find stores</button>
+</form>
+{% if stores is not none %}
+<table>
+<tr><th>Store</th><th>Address</th><th>Distance</th><th>Promise time</th><th>Hours</th></tr>
+{% for s in stores %}
+<tr>
+<td>{{ s.store_num or "" }} — {{ s.store_name or "" }}</td>
+<td>{{ s.street or "" }}, {{ s.city or "" }} {{ s.state or "" }} {{ s.zip or "" }}</td>
+<td>{{ s.distance or "" }} {{ s.distance_unit or "" }}</td>
+<td>{{ s.promise_time or "" }}{% if s.is_no_promise_time %} — cannot promise a pickup time, do not submit to this store{% endif %}</td>
+<td>{{ s.open_time or "" }} – {{ s.close_time or "" }}</td>
+</tr>
+{% endfor %}
+</table>
+<p>Stores are shown in the order the API returned them. Fetch a fresh promise time for every order.</p>
+{% endif %}
+{% endblock %}

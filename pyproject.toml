@@ -30,6 +30,9 @@ dev = [
     "pytest>=8",
     "ruff>=0.6",
 ]
+web = [
+    "Flask>=3,<4",
+]
 
 [project.scripts]
 walgreens-prints = "walgreens_photo_prints.cli:main"
@@ -40,6 +43,9 @@ Repository = "https://github.com/enonymous1/walgreens-photo-prints"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[tool.setuptools.package-data]
+walgreens_photo_prints = ["templates/*.html", "static/*"]
 
 [tool.setuptools.dynamic]
 version = { attr = "walgreens_photo_prints._version.__version__" }

@@ -1,0 +1,20 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Submit order</h2>
+<p>Step 1: fill in the order and review the preview. Step 2: confirm and check the terms action. Nothing is submitted until step 2.</p>
+<form method="post" action="/submit">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>First name <input type="text" name="first_name" value="{{ fields.first_name }}" required></label>
+<label>Last name <input type="text" name="last_name" value="{{ fields.last_name }}" required></label>
+<label>Phone <input type="text" name="phone" value="{{ fields.phone }}" required></label>
+<label>Email <input type="text" name="email" value="{{ fields.email }}" required></label>
+<label>Store number <input type="text" name="store_num" value="{{ fields.store_num }}" required></label>
+<label>Promise time <input type="text" name="promise_time" value="{{ fields.promise_time }}" required></label>
+<label>Coupon code (optional) <input type="text" name="coupon_code" value="{{ fields.coupon_code }}"></label>
+<label>Publisher ID (optional) <input type="text" name="publisher_id" value="{{ fields.publisher_id }}"></label>
+<label>Affiliate notes (optional) <input type="text" name="aff_notes" value="{{ fields.aff_notes }}"></label>
+<label>Order products (JSON) <textarea name="product_details" rows="6" required>{{ product_details }}</textarea></label>
+<p>Order format: <code>[{"productId": "8420005", "imageDetails": [{"url": "UPLOAD_URL", "qty": "1"}]}]</code></p>
+<button type="submit">Preview order</button>
+</form>
+{% endblock %}

@@ -167,12 +167,44 @@ def build_parser():
     p = sub.add_parser("upload", help="Upload one image via fresh credentials.")
     _add_config_args(p)
     p.add_argument("image", help="Path to a JPEG image file.")
+
+    p = sub.add_parser(
+        "serve",
+        help="Run the Flask front-end locally (needs the [web] extra).",
+    )
+    p.add_argument("--demo", action="store_true", help="Use fictional demo data, no network.")
+    p.add_argument("--host", default="127.0.0.1", help="Bind host, default 127.0.0.1.")
+    p.add_argument("--port", type=int, default=5000, help="Port, default 5000.")
     return parser
+
+
+def _run_serve(args):
+    try:
+        from .webapp import create_app
+    except ImportError:
+        print(
+            'error: Flask is required for serve. Install it with: pip install -e ".[web]"',
+            file=sys.stderr,
+        )
+        return 1
+    try:
+        app = create_app(demo=args.demo)
+    except ConfigError as exc:
+        print(f"error: {exc}", file=sys.stderr)
+        return 1
+    mode = "demo" if args.demo else "live"
+    print(f"Serving walgreens-photo-prints ({mode}) on http://{args.host}:{args.port}/")
+    if not args.demo:
+        print("Live mode: run locally only, this app has no login.", file=sys.stderr)
+    app.run(host=args.host, port=args.port)
+    return 0
 
 
 def main(argv=None):
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "serve":
+        return _run_serve(args)
     try:
         config = _config_from_args(args)
     except ConfigError as exc:

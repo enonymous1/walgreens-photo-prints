@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Order status</h2>
+<form method="post" action="/status">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>Vendor order IDs (one per line, or comma-separated) <textarea name="order_ids" rows="4" required>{{ order_ids }}</textarea></label>
+<button type="submit">Check status</button>
+</form>
+{% if entries is not none %}
+<table>
+<tr><th>Order ID</th><th>Valid</th><th>Code</th><th>Status</th></tr>
+{% for e in entries %}
+<tr><td>{{ e.order_id or "" }}</td><td>{{ e.valid }}</td><td>{{ e.code or "" }}</td><td>{{ e.status_label or "" }}</td></tr>
+{% endfor %}
+</table>
+<p>The raw order status string is authoritative: code 2 alone is ambiguous (Downloaded vs Received at Store).</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Walgreens Photo Prints</title>
+<link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+<header>
+<h1>Walgreens Photo Prints</h1>
+<nav>
+<a href="/">Home</a>
+<a href="/products">Products</a>
+<a href="/stores">Stores</a>
+<a href="/coupon">Coupon</a>
+<a href="/upload">Upload</a>
+<a href="/submit">Submit</a>
+<a href="/status">Status</a>
+</nav>
+</header>
+{% if demo %}
+<p class="banner demo-banner">Demo mode: fictional data only. No network call is made and no real order is placed.</p>
+{% else %}
+<p class="banner live-banner">Live mode: this app uses your server-side credentials. Run it locally only; it has no login.</p>
+{% endif %}
+<main>
+{% block content %}{% endblock %}
+</main>
+<footer>
+<p>Not affiliated with or endorsed by Walgreens. Version {{ version }}. See README for the live-use and Pages-freeze notes.</p>
+</footer>
+</body>
+</html>

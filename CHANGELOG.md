@@ -1,5 +1,41 @@
 # Changelog
 
+## 1.3.0 — 2026-10-31
+
+Flask front-end plus a Pages freeze demo. The library and CLI are
+unchanged in behaviour; this release adds a web layer on top of
+them.
+
+Added:
+
+- Flask front-end (`walgreens_photo_prints.webapp`, optional
+  `[web]` extra, run with `walgreens-prints serve`): products,
+  stores, coupon, upload, two-step submit, and status pages.
+  Live mode builds a real client from the environment, with
+  credentials server-side only; demo mode (`--demo`) uses
+  fictional data from `demo.py` and makes no network call.
+- Submit in the web UI keeps the CLI's gates: a redacted
+  preview first, then a second POST with both `confirm` and
+  `accept_terms` checked. CSRF tokens are required on every
+  POST form. Live mode has no login: run it locally only.
+- `scripts/freeze.py` + `.github/workflows/pages-freeze.yml`:
+  the demo app is rendered with the Flask test client into
+  `freeze-site/` (gitignored, never committed), with forms
+  disabled and a static-demo banner, for GitHub Pages. The
+  freeze builds its own demo app and takes no credentials
+  argument, so real data cannot be frozen by accident.
+- Tests for the web app (demo flows, CSRF rejection, redacted
+  preview, demo submit) and for the freeze (all pages, banner,
+  disabled forms, no absolute paths, no leaked env secrets).
+
+Not included, deliberately:
+
+- No live Pages app: Pages is static and cannot hold the API
+  key, upload files, or submit orders. The frozen site is a
+  demo only.
+- No public hosting or login for live mode. A publicly hosted
+  ordering service would need auth, which is out of scope.
+
 ## 1.2.0 — 2026-10-31
 
 Stage 3 of the staff review: architecture, with no behaviour

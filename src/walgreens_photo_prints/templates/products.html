@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block content %}
+<h2>Products</h2>
+<form method="post" action="/products">
+<input type="hidden" name="csrf_token" value="{{ csrf_token }}">
+<label>Product group ID (optional) <input type="text" name="product_group_id" value="{{ group_id }}"></label>
+<button type="submit">List products</button>
+</form>
+{% if products is not none %}
+<table>
+<tr><th>Product ID</th><th>Description</th><th>Size</th><th>Price</th></tr>
+{% for p in products %}
+<tr><td>{{ p.product_id }}</td><td>{{ p.product_desc or "" }}</td><td>{{ p.product_size or "" }}</td><td>{{ p.product_price or "" }}</td></tr>
+{% endfor %}
+</table>
+<p>Call this every time products or prices are shown: the API states prices and products can change at any time.</p>
+{% endif %}
+{% endblock %}
