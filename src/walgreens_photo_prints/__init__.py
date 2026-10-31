@@ -1,5 +1,7 @@
 """Walgreens Native Photo Prints API v3 client."""
 
+from ._version import __version__
+
 from .client import WalgreensClient
 from .config import Config, ConfigError
 from .errors import WalgreensApiError
@@ -14,8 +16,6 @@ from .models import (
     UploadCredentials,
 )
 from .upload import build_upload_url, upload_image, upload_image_for_credentials
-
-__version__ = "1.0.0"
 
 __all__ = [
     "Config",

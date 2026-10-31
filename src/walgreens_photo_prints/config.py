@@ -6,6 +6,7 @@ Credentials are never hardcoded. They come from the environment (or a
 
 import os
 from dataclasses import dataclass, field
+from urllib.parse import urlparse
 
 from .errors import ConfigError
 
@@ -23,6 +24,10 @@ class Config:
     by the API for coupon, store, and submit calls; the client raises a
     clear error when a call needs them and neither the config nor the
     call arguments supply them.
+
+    The default base URL is the sandbox host on purpose: a missing
+    ``WALGREENS_BASE_URL`` must never accidentally place a production
+    order. Production requires an explicit opt-in.
     """
 
     api_key: str = field(repr=False)
@@ -46,35 +51,49 @@ class Config:
         object.__setattr__(self, "base_url", base_url)
         if not self.platform or not self.platform.strip():
             raise ConfigError("Platform must not be empty.")
-        if self.timeout <= 0:
-            raise ConfigError(f"Timeout must be positive, got {self.timeout!r}.")
+        object.__setattr__(self, "platform", self.platform.strip())
+        if self.app_ver is not None:
+            object.__setattr__(self, "app_ver", self.app_ver.strip() or None)
+        if self.dev_inf is not None:
+            object.__setattr__(self, "dev_inf", self.dev_inf.strip() or None)
+        try:
+            timeout_ok = self.timeout is not None and self.timeout > 0
+        except TypeError:
+            timeout_ok = False
+        if not timeout_ok:
+            raise ConfigError(f"Timeout must be a positive number, got {self.timeout!r}.")
 
     @property
     def is_sandbox(self):
-        """True when the base URL is the QA/sandbox host."""
-        return "services-qa.walgreens.com" in self.base_url
+        """True when the base URL host is the QA/sandbox host."""
+        return urlparse(self.base_url).hostname == "services-qa.walgreens.com"
 
     @classmethod
     def from_env(cls, env=None, *, env_file=None):
         """Build a Config from environment variables.
 
-        ``env`` defaults to ``os.environ``. When ``env_file`` is given, or
-        when a ``.env`` file exists in the working directory, values from
-        it fill in variables that are not already set in the environment;
-        real environment variables always win.
+        Precedence, highest first: the ``env`` mapping (or
+        ``os.environ`` when ``env`` is None), then the dotenv file.
+        The dotenv file is parsed without mutating ``os.environ``,
+        so passing an explicit ``env`` mapping sees the file values
+        too. When ``env_file`` is None, a ``.env`` file in the
+        working directory is used when present.
         """
-        if env_file is not None:
-            _load_dotenv(env_file)
-        elif os.path.exists(".env"):
-            _load_dotenv(".env")
+        file_values = {}
+        dotenv_path = env_file
+        if dotenv_path is None and os.path.exists(".env"):
+            dotenv_path = ".env"
+        if dotenv_path is not None:
+            file_values = _dotenv_values(dotenv_path)
         values = os.environ if env is None else env
-        api_key = values.get("WALGREENS_API_KEY", "")
-        aff_id = values.get("WALGREENS_AFF_ID", "")
-        base_url = values.get("WALGREENS_BASE_URL") or SANDBOX_BASE_URL
-        platform = values.get("WALGREENS_PLATFORM") or "ios"
-        app_ver = values.get("WALGREENS_APP_VER") or None
-        dev_inf = values.get("WALGREENS_DEV_INF") or None
-        timeout_raw = values.get("WALGREENS_TIMEOUT")
+        merged = {**file_values, **values}
+        api_key = merged.get("WALGREENS_API_KEY", "") or ""
+        aff_id = merged.get("WALGREENS_AFF_ID", "") or ""
+        base_url = merged.get("WALGREENS_BASE_URL") or SANDBOX_BASE_URL
+        platform = merged.get("WALGREENS_PLATFORM") or "ios"
+        app_ver = merged.get("WALGREENS_APP_VER") or None
+        dev_inf = merged.get("WALGREENS_DEV_INF") or None
+        timeout_raw = merged.get("WALGREENS_TIMEOUT")
         try:
             timeout = float(timeout_raw) if timeout_raw else DEFAULT_TIMEOUT
         except ValueError:
@@ -90,10 +109,11 @@ class Config:
         )
 
 
-def _load_dotenv(path):
-    """Load a dotenv file without overwriting existing environment values."""
+def _dotenv_values(path):
+    """Parse a dotenv file into a dict, without touching ``os.environ``."""
     try:
-        from dotenv import load_dotenv
+        from dotenv import dotenv_values
     except ImportError:  # pragma: no cover - python-dotenv is a dependency
-        return
-    load_dotenv(path, override=False)
+        return {}
+    values = dotenv_values(path)
+    return {key: value for key, value in values.items() if value is not None}

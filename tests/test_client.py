@@ -244,7 +244,7 @@ def test_submit_order_enforces_image_limits(make_client):
             terms_accepted=True,
         )
     too_many_qty = OrderProduct("1", [ImageDetail("https://example.test/x.jpg", "21")])
-    with pytest.raises(ValueError, match="20 prints"):
+    with pytest.raises(ValueError, match="outside the API range"):
         client.submit_order(
             first_name="A",
             last_name="B",
@@ -280,9 +280,22 @@ def test_get_order_status_and_code_two_ambiguity(make_client):
     )
     entries = client.get_order_status(["0000000001", "0000000003"])
     assert entries[0].valid and entries[0].code == "2"
-    assert entries[0].status_label == "Downloaded / Received at Store"
+    # The raw orderStatus string is authoritative for code 2, which
+    # the reference lists twice; it is not replaced by the combined map label.
+    assert entries[0].status_label == "Downloaded"
     assert entries[0].order_status == "Downloaded"
     assert not entries[1].valid
+
+
+def test_status_label_falls_back_to_code_map_when_no_string(make_client):
+    client, _ = make_client(
+        [
+            FakeResponse(
+                {"statuses": [{"valid": "true", "code": "3", "orderId": "1", "orderStatus": ""}]}
+            )
+        ]
+    )
+    assert client.get_order_status(["1"])[0].status_label == "Ready for Pickup"
 
 
 def test_get_order_status_requires_ids(make_client):
@@ -335,10 +348,9 @@ def test_transport_error_wrapped(make_client, monkeypatch):
         client.list_products()
 
 
-def test_context_manager_closes_owned_session(config):
+def test_context_manager_does_not_close_injected_session(config):
     session = FakeSession([FakeResponse({"products": []})])
-    # Owned session path: construct without passing a session is hard to
-    # observe, so assert the injected-session path does not close it.
+    # Injected sessions belong to the caller; the client must not close them.
     client = WalgreensClient(config, session=session)
     with client:
         client.list_products()

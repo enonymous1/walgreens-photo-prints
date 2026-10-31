@@ -1,20 +1,54 @@
 # walgreens-photo-prints
 
-A Python client and CLI for the Walgreens Native Photo Prints API v3: fetch upload credentials, list products and prices, validate coupons, find photo stores, submit orders, and check order status. Uploads go to Walgreens cloud storage via a short-lived SAS token, for same-day pickup at a Walgreens store.
+## Description
 
-This is a standalone modernization of a small March 2024 client (`ss-walgreens`) that covered only three of the six endpoints and made network calls on import. It is not affiliated with or endorsed by Walgreens. You need your own API key and affiliate ID from the [Walgreens Developer Portal](https://developer.walgreens.com/apis).
+A Python client and CLI for the Walgreens Native Photo Prints API v3:
+fetch upload credentials, list products and prices, validate coupons,
+find photo stores, submit orders, and check order status. Uploads go to
+Walgreens cloud storage via a short-lived SAS token, for same-day
+pickup at a Walgreens store.
 
-## Install
+This is a standalone modernization of a small March 2024 client
+(`ss-walgreens`) that covered only three of the six endpoints and made
+network calls on import. It is not affiliated with or endorsed by
+Walgreens.
 
-Requires Python 3.10+.
+![Architecture](docs/assets/architecture.svg)
+
+Status: code complete, tests mocked only. No live Walgreens run has
+been performed with this package, CI has not run until the first
+push, and no release tag exists yet. See Deployment.
+
+## Prerequisites
+
+- Python 3.10 or later.
+- Git, for cloning.
+- A Walgreens Developer Portal account, plus your own API key and
+  affiliate ID, for any live call. Mocked tests need no credentials.
+- For a real order: a store, a promise time from `find_stores`, and a
+  customer terms action (see Usage). Orders are real once submitted.
+
+## Installation
+
+This package is not published to PyPI. Install from a checkout:
 
 ```powershell
-pip install -e .
+git clone https://github.com/enonymous1/walgreens-photo-prints.git
+cd walgreens-photo-prints
+pip install .
 ```
 
-## Configure
+For development (editable install with test and lint tools):
 
-Credentials come from the environment or a `.env` file. Never commit a `.env` file, and never hardcode a key in source. Copy the example values, not a real key:
+```powershell
+pip install -e ".[dev]"
+```
+
+Then copy the example environment file and fill in your own values:
+
+```powershell
+copy .env.example .env
+```
 
 ```env
 WALGREENS_API_KEY=your-api-key
@@ -24,11 +58,44 @@ WALGREENS_APP_VER=1.0
 WALGREENS_DEV_INF=YourDevice,1.0
 ```
 
-Defaults: the sandbox base URL above, platform `ios`, 30-second timeout. Set `WALGREENS_BASE_URL=https://services.walgreens.com` for production. `WALGREENS_APP_VER` and `WALGREENS_DEV_INF` are optional for credentials and products, required by the API for coupon, store, and submit calls.
+Never commit `.env`, and never hardcode a key in source. If you are
+migrating from the 2024 original, treat any key that was ever
+committed as compromised: rotate or revoke it in the developer portal
+and use a fresh key here. Defaults are the sandbox base URL, platform
+`ios`, and a 30-second timeout; set `WALGREENS_BASE_URL` to
+`https://services.walgreens.com` for production. `WALGREENS_APP_VER`
+and `WALGREENS_DEV_INF` are optional for credentials and products and
+required by the API for coupon, store, and submit calls.
 
-If you are migrating from the 2024 original: the old `config.py` hardcoded an API key. Treat any key that was ever committed as compromised, rotate or revoke it in the developer portal, and put the replacement in the environment only. The old `production_url` value was actually the credentials endpoint, not a base URL; this package uses a single base URL for all six endpoints.
+## Local Development
 
-## CLI
+On Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -e ".[dev]"
+pytest
+ruff check src tests
+ruff format --check src tests
+```
+
+On macOS/Linux, activate with `source .venv/bin/activate` instead.
+Run a single test file with `pytest tests/test_client.py -q`. All
+tests use mocked responses modelled on the API reference examples; no
+test touches the live API, so the suite is safe to run anywhere.
+
+Verify a change the way it will be consumed: install from a fresh
+extraction into a fresh virtual environment, then run
+`walgreens-prints --version`, `walgreens-prints --help`, and the full
+suite from that copy. The CLI entry points are `walgreens-prints` and
+`python -m walgreens_photo_prints`.
+
+Configuration precedence, highest first: CLI flags, environment
+variables, then the `.env` file (which never overwrites the
+environment). Importing the package makes no network calls.
+
+## Usage
 
 ```powershell
 walgreens-prints creds
@@ -46,7 +113,10 @@ walgreens-prints upload photo.jpg
 [{"productId": "0000001", "qty": "10"}]
 ```
 
-`submit` places a real order. Without `--confirm` it only prints the redacted payload and exits with status 2. With `--confirm` you must also pass `--accept-terms`, asserting the customer took the required action on the terms element for this order:
+`submit` places a real order. Without `--confirm` it only prints the
+redacted payload and exits with status 2. With `--confirm` you must
+also pass `--accept-terms`, asserting the customer took the required
+action on the terms element for this order:
 
 ```powershell
 walgreens-prints submit --first-name "Jane" --last-name "Doe" --phone "5555555555" --email "jane@example.com" --store-num "211" --promise-time "03-02-2020 5:15 PM" --product-details order.json --confirm --accept-terms
@@ -58,9 +128,7 @@ walgreens-prints submit --first-name "Jane" --last-name "Doe" --phone "555555555
 [{"productId": "8420005", "imageDetails": [{"url": "UPLOAD_URL", "qty": "1"}]}]
 ```
 
-Every command also accepts `--api-key`, `--aff-id`, `--base-url`, `--app-ver`, `--dev-inf`, `--platform`, `--timeout`, and `--env-file` flags, which override the environment for that run. `creds` output redacts the SAS token; `upload-url` and `upload` print a signed upload URL, so do not share that output.
-
-## Library
+Library use:
 
 ```python
 from walgreens_photo_prints import Config, WalgreensClient, upload_image_for_credentials
@@ -72,22 +140,13 @@ with WalgreensClient(config) as client:
     upload_url, status = upload_image_for_credentials(client, "photo.jpg")
 ```
 
-Importing the package makes no network calls. Fetch credentials once and reuse them; `upload_image_for_credentials` does exactly one credentials fetch per upload.
+`upload_image_for_credentials` fetches credentials exactly once per
+upload. `creds` output redacts the SAS token; `upload-url` and `upload`
+print a signed upload URL, so do not share that output.
 
-```python
-from walgreens_photo_prints import ImageDetail, OrderProduct
+![Upload and order flow](docs/assets/order-flow.svg)
 
-result = client.submit_order(
-    first_name="Jane", last_name="Doe", phone="5555555555",
-    email="jane@example.com", store_num="211",
-    promise_time="03-02-2020 5:15 PM",
-    product_details=[OrderProduct("8420005", [ImageDetail(upload_url, "1")])],
-    terms_accepted=True,
-)
-print(result.vendor_order_id)
-```
-
-## Endpoints
+### Endpoints
 
 | Method | Endpoint | Rate limit |
 |---|---|---|
@@ -98,22 +157,61 @@ print(result.vendor_order_id)
 | `submit_order` | `POST /api/photo/order/submit/v3` | 300/min |
 | `get_order_status` | `POST /api/photo/order/status/v3` | 300/min |
 
-Call `list_products` every time products or prices are shown; the API states prices and products can change at any time. Validate a coupon before adding it to a submit request. The discount is subtracted from the total: `new_subtotal = order_total_price - order_discount_price`. Fetch a fresh promise time from `find_stores` for every order, and never submit to a store reporting the no-promise-time sentinel (`01-01-3000 00:00 AM`, exposed as `PhotoStore.is_no_promise_time`).
+Call `list_products` every time products or prices are shown; the API
+states prices and products can change at any time. Validate a coupon
+before adding it to a submit request. Fetch a fresh promise time from
+`find_stores` for every order, and never submit to a store reporting
+the no-promise-time sentinel (`01-01-3000 00:00 AM`, exposed as
+`PhotoStore.is_no_promise_time`). Client-side order limits: at most
+200 distinct images, at most 20 prints per image URL. The post-coupon
+price limit (under $998) cannot be checked by this client; validate
+the coupon and check the total before submitting. The client does not
+retry or pace requests, and a 429 raises `WalgreensApiError` with
+`throttled=True`; wait and re-run, and do not treat a throttled result
+as a measurement. There is deliberately no automatic retry on submit:
+it is not idempotent, so retrying after a timeout could place the
+order twice.
 
-Order limits enforced client-side before any request is sent: at most 200 distinct images, at most 20 prints per image URL. The post-coupon price limit (under $998) cannot be checked by this client; validate the coupon and check the total before submitting. The client does not retry or pace requests. A 429 raises `WalgreensApiError` with `throttled=True` and the `Retry-After` value when present; wait and re-run, and do not treat a throttled result as a measurement.
+### Known limitations and documentation notes
 
-## Response shapes and documentation notes
+Responses are JSON objects with `err`/`errCode` and `errDesc` fields;
+any non-empty error, or a `status` of `error`/`failure`, raises
+`WalgreensApiError`. Lists are returned in the order the API returned
+them and are never sorted. Fields may be absent or null; list parsers
+drop only entries missing the one usable identifier (`productId` for
+products, `photoStoreDetails` for stores).
 
-Responses are JSON objects with `err`/`errCode` and `errDesc` fields; any non-empty error, or a `status` of `error`/`failure`, raises `WalgreensApiError`. Lists are returned in the order the API returned them and are never sorted. Fields may be absent or null; list parsers drop only entries missing the one usable identifier (`productId` for products, `photoStoreDetails` for stores) and keep everything else, nulls included.
+The API reference contains two conflicting submit-order examples.
+This client implements the first, canonical shape
+(`act: submitphotoorder`, optional `publisherId`/`couponCode`/
+`affNotes`, `productDetails` of `productId` + `imageDetails`). The
+second example uses different field names (`currencyType`, `sdkVer`,
+`act: storenumber`, lowercase `apikey`/`devinf`/`appver`) and sets
+`affId` to an API-key placeholder. That shape is not implemented and
+must be resolved by a live sandbox run. The reference also lists
+status code `2` twice ("Downloaded" and "Received at Store"); the raw
+`orderStatus` string is authoritative. The terms-and-conditions copy
+the reference requires in the app UI is not quoted in the reference
+excerpt this was built from; the client enforces that the caller
+collected the terms action but does not supply the copy.
 
-The API reference contains two conflicting submit-order examples. This client implements the first, canonical shape (`act: submitphotoorder`, `publisherId`/`couponCode`/`affNotes` optional, `productDetails` of `productId` + `imageDetails`). The second example uses different field names (`currencyType`, `sdkVer`, `act: storenumber`, lowercase `apikey`/`devinf`/`appver`) and sets `affId` to an API-key placeholder. That shape is not implemented and must be resolved by a live sandbox run before relying on it. The reference also lists status code `2` twice ("Downloaded" and "Received at Store"); `OrderStatusEntry.status_label` reports both, and the raw `orderStatus` string is authoritative. The terms-and-conditions copy the reference requires in the app UI is not quoted in the reference excerpt this was built from; the client enforces that the caller collected the terms action (`terms_accepted=True` / `--accept-terms`) but does not supply the copy.
+## Deployment
 
-No live Walgreens run has been performed with this package. All tests use mocked responses modeled on the reference examples. A sandbox run with a fresh key is the remaining gate: credentials, products, and store search first, then a sandbox submit and status check. See `CHANGELOG.md` for what changed from the 2024 original.
+There is no server to deploy and no PyPI release. Deployment means:
+push to GitHub, let CI go green, run the sandbox smoke test, then tag.
 
-## Development
+1. Check `enonymous1/walgreens-photo-prints` signed in; create an
+   empty public repository if it does not exist.
+2. Extract the export to an empty folder, add the remote, push `main`.
+3. Confirm the GitHub Actions matrix (Python 3.10–3.13, Ubuntu and
+   Windows) is green.
+4. Run the sandbox smoke test with a fresh key: credentials, products,
+   and store search first, then a sandbox submit and status check.
+5. Only then tag the release version and create the GitHub Release,
+   noting that live verification is complete and which submit shape
+   the sandbox confirmed.
 
-```powershell
-pip install -e ".[dev]"
-pytest
-ruff check src tests
-```
+After release, apply the repository description and topics, and see
+`SECURITY.md` and `CONTRIBUTING.md` before accepting outside
+contributions. See `CHANGELOG.md` for what changed from the 2024
+original.

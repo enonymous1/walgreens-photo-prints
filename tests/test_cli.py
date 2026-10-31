@@ -219,10 +219,12 @@ def test_cli_submit_confirm_without_accept_terms_exits_2(monkeypatch, tmp_path, 
 
 
 def test_cli_version(capsys):
+    from walgreens_photo_prints import __version__
+
     with pytest.raises(SystemExit) as excinfo:
         main(["--version"])
     assert excinfo.value.code == 0
-    assert "1.0.0" in capsys.readouterr().out
+    assert __version__ in capsys.readouterr().out
 
 
 def test_cli_bad_product_details_file(monkeypatch, tmp_path, capsys):

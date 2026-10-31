@@ -7,11 +7,12 @@ from walgreens_photo_prints.config import Config
 
 
 class FakeResponse:
-    def __init__(self, json_data=None, status_code=200, headers=None, json_error=False):
+    def __init__(self, json_data=None, status_code=200, headers=None, json_error=False, text=""):
         self._json_data = json_data
         self.status_code = status_code
         self.headers = headers or {}
         self._json_error = json_error
+        self.text = text
 
     def json(self):
         if self._json_error:

@@ -15,14 +15,24 @@ Rate limits stated in the API reference (requests per minute):
 creds 300, products 300, coupon 100, store 300, submit 300, status 300.
 This client does not retry or pace; callers that loop must pace
 themselves to those limits.
+
+There is deliberately no automatic retry. ``submit_order`` is not
+idempotent: retrying it after a timeout could place the order twice.
+The idempotent endpoints (credentials, products, stores, status,
+coupon validation) are safe for a caller to retry; submit is not, so
+retry policy stays with the caller, not the client.
 """
+
+import logging
 
 import requests
 
+from ._version import __version__
 from .config import Config
 from .errors import ConfigError, WalgreensApiError
 from .models import (
     CouponResult,
+    ImageDetail,
     OrderProduct,
     OrderSubmission,
     UploadCredentials,
@@ -30,6 +40,8 @@ from .models import (
     parse_products,
     parse_stores,
 )
+
+logger = logging.getLogger(__name__)
 
 RATE_LIMITS_PER_MINUTE = {
     "creds": 300,
@@ -69,16 +81,27 @@ class WalgreensClient:
     # -- internals -----------------------------------------------------
 
     def _post(self, path, payload):
+        """Send one JSON POST and return the response object.
+
+        Raises ``WalgreensApiError`` for transport failures, HTTP
+        errors (including the response body, truncated, so the API's
+        own error text is not lost), non-JSON or non-object bodies,
+        and API-level errors. A 429 additionally sets
+        ``throttled=True``. Payloads are never logged: they contain
+        the API key.
+        """
         url = self.config.base_url + path
+        headers = {
+            "Content-Type": "application/json",
+            "User-Agent": f"walgreens-photo-prints/{__version__}",
+        }
         try:
             response = self._session.post(
-                url,
-                headers={"Content-Type": "application/json"},
-                json=payload,
-                timeout=self.config.timeout,
+                url, headers=headers, json=payload, timeout=self.config.timeout
             )
         except requests.RequestException as exc:
             raise WalgreensApiError(f"Request to {path} failed: {exc}") from exc
+        logger.debug("POST %s -> HTTP %s", path, response.status_code)
         if response.status_code == 429:
             retry_after = _retry_after_seconds(response)
             raise WalgreensApiError(
@@ -90,8 +113,9 @@ class WalgreensClient:
                 throttled=True,
             )
         if not 200 <= response.status_code < 300:
+            body = (getattr(response, "text", "") or "")[:200]
             raise WalgreensApiError(
-                f"Walgreens API returned HTTP {response.status_code} for {path}.",
+                f"Walgreens API returned HTTP {response.status_code} for {path}. {body}",
                 status_code=response.status_code,
             )
         try:
@@ -107,11 +131,17 @@ class WalgreensClient:
         _raise_for_api_error(data, path)
         return data
 
-    def _base_payload(self, app_ver=None, dev_inf=None, *, require_app_ver=False):
+    def _base_payload(self, app_ver=None, dev_inf=None, *, require_app_and_device=False):
+        """Base payload: credentials plus optional app/device fields.
+
+        When ``require_app_and_device`` is set, both fields must
+        resolve (from arguments or config) or ``ConfigError`` is
+        raised before any request is sent.
+        """
         payload = {"apiKey": self.config.api_key, "affId": self.config.aff_id}
         resolved_ver = app_ver if app_ver is not None else self.config.app_ver
         resolved_inf = dev_inf if dev_inf is not None else self.config.dev_inf
-        if require_app_ver and (resolved_ver is None or resolved_inf is None):
+        if require_app_and_device and (resolved_ver is None or resolved_inf is None):
             raise ConfigError(
                 "This endpoint requires appVer and devInf. Set "
                 "WALGREENS_APP_VER / WALGREENS_DEV_INF or pass them explicitly."
@@ -153,10 +183,13 @@ class WalgreensClient:
         mappings. Only add the coupon to a submit request after a
         successful validation.
         """
-        payload = self._base_payload(app_ver, dev_inf, require_app_ver=True)
+        payload = self._base_payload(app_ver, dev_inf, require_app_and_device=True)
         payload["couponCode"] = coupon_code
         payload["act"] = "getdiscount"
-        payload["productDetails"] = [_product_qty_payload(d) for d in product_details]
+        payload["productDetails"] = [
+            _product_qty_payload(d)
+            for d in _require_non_empty_list(product_details, "productDetails")
+        ]
         data = self._post("/api/photo/order/coupon/v3", payload)
         return CouponResult.from_dict(data)
 
@@ -164,16 +197,21 @@ class WalgreensClient:
         """Find photo stores near a location (``/api/photo/store/v3``).
 
         ``latitude``/``longitude`` may be strings or numbers; they are
-        sent as strings, as in the API examples. Returns stores in the
-        order the API returned them. A store whose ``promise_time`` is
+        validated to -90..90 / -180..180 and sent as strings, as in
+        the API examples. Returns stores in the order the API returned
+        them. A store whose ``promise_time`` is
         ``01-01-3000 00:00 AM`` is in the API's no-promise-time state
         (see ``PhotoStore.is_no_promise_time``).
         """
-        payload = self._base_payload(app_ver, dev_inf, require_app_ver=True)
-        payload["latitude"] = str(latitude)
-        payload["longitude"] = str(longitude)
+        payload = self._base_payload(app_ver, dev_inf, require_app_and_device=True)
+        latitude, longitude = _validate_lat_lon(latitude, longitude)
+        payload["latitude"] = latitude
+        payload["longitude"] = longitude
         payload["act"] = "photoStores"
-        payload["productDetails"] = [_product_qty_payload(d) for d in product_details]
+        payload["productDetails"] = [
+            _product_qty_payload(d)
+            for d in _require_non_empty_list(product_details, "productDetails")
+        ]
         data = self._post("/api/photo/store/v3", payload)
         return parse_stores(data)
 
@@ -248,26 +286,37 @@ class WalgreensClient:
         """Build (and validate) a submit payload without sending it.
 
         The returned payload contains the API key; callers that print
-        it must redact ``apiKey`` first.
+        it must redact ``apiKey`` first. Validation here is the same
+        whether the caller is the library or the CLI: required
+        customer/store fields must be non-empty, at least one product
+        with at least one image is required, quantities are integers
+        in 1..20, and distinct image URLs across the order must not
+        exceed the API limit.
         """
-        products = [_coerce_order_product(d) for d in product_details]
-        distinct_images = sum(p.distinct_image_count() for p in products)
-        if distinct_images > MAX_DISTINCT_IMAGES:
+        _require_non_empty(first_name, "first_name")
+        _require_non_empty(last_name, "last_name")
+        _require_non_empty(phone, "phone")
+        _require_non_empty(email, "email")
+        _require_non_empty(store_num, "store_num")
+        _require_non_empty(promise_time, "promise_time")
+        products = [
+            _coerce_order_product(d)
+            for d in _require_non_empty_list(product_details, "product_details")
+        ]
+        for product in products:
+            if not product.image_details:
+                raise ValueError(f"Order product {product.product_id!r} needs at least one image.")
+        distinct_urls = set()
+        for product in products:
+            distinct_urls.update(product.distinct_image_urls())
+        if len(distinct_urls) > MAX_DISTINCT_IMAGES:
             raise ValueError(
-                f"Order has {distinct_images} distinct images; "
+                f"Order has {len(distinct_urls)} distinct images; "
                 f"the API allows at most {MAX_DISTINCT_IMAGES}."
             )
         for product in products:
             for image in product.image_details:
-                try:
-                    qty = int(image.qty)
-                except (TypeError, ValueError):
-                    raise ValueError(f"Image qty must be an integer, got {image.qty!r}.") from None
-                if qty > MAX_QTY_PER_IMAGE:
-                    raise ValueError(
-                        f"Image qty {qty} exceeds the API limit of "
-                        f"{MAX_QTY_PER_IMAGE} prints per image URL."
-                    )
+                _validate_qty(image.qty)
         payload = self._base_payload(app_ver, dev_inf)
         if publisher_id is not None:
             payload["publisherId"] = publisher_id
@@ -301,6 +350,52 @@ class WalgreensClient:
         return parse_order_statuses(data)
 
 
+def _require_non_empty(value, name):
+    if value is None or str(value).strip() == "":
+        raise ValueError(f"{name} must not be empty.")
+    return str(value)
+
+
+def _require_non_empty_list(value, name):
+    items = list(value) if value is not None else []
+    if not items:
+        raise ValueError(f"{name} must contain at least one entry.")
+    return items
+
+
+def _validate_qty(value):
+    """Validate a print quantity: an integer in 1..MAX_QTY_PER_IMAGE.
+
+    Bools and floats are rejected outright so ``1.9`` is never
+    silently truncated to ``1``, and ``0``/negatives fail here
+    instead of at the API.
+    """
+    if isinstance(value, bool):
+        raise ValueError(f"Image qty must be an integer, got {value!r}.")
+    if isinstance(value, int):
+        qty = value
+    elif isinstance(value, str) and value.strip().isdigit():
+        qty = int(value.strip())
+    else:
+        raise ValueError(f"Image qty must be an integer, got {value!r}.")
+    if not 1 <= qty <= MAX_QTY_PER_IMAGE:
+        raise ValueError(f"Image qty {qty} is outside the API range 1..{MAX_QTY_PER_IMAGE}.")
+    return qty
+
+
+def _validate_lat_lon(latitude, longitude):
+    try:
+        lat = float(latitude)
+        lon = float(longitude)
+    except (TypeError, ValueError):
+        raise ValueError(
+            f"Latitude/longitude must be numbers, got {latitude!r}, {longitude!r}."
+        ) from None
+    if not -90 <= lat <= 90 or not -180 <= lon <= 180:
+        raise ValueError(f"Latitude/longitude out of range: {lat}, {lon}.")
+    return str(lat), str(lon)
+
+
 def _product_qty_payload(detail):
     if isinstance(detail, dict):
         product_id = detail.get("productId")
@@ -317,8 +412,6 @@ def _coerce_order_product(detail):
     if isinstance(detail, OrderProduct):
         return detail
     if isinstance(detail, dict):
-        from .models import ImageDetail
-
         images = [
             ImageDetail(url=str(i["url"]), qty=str(i.get("qty", "1")))
             for i in detail.get("imageDetails", [])
@@ -348,10 +441,25 @@ def _raise_for_api_error(data, path):
 
 
 def _retry_after_seconds(response):
+    """Parse ``Retry-After`` as seconds, or as an HTTP date.
+
+    Returns ``None`` when the header is absent or unparseable, so a
+    malformed header never turns a rate-limit error into a crash.
+    """
     raw = response.headers.get("Retry-After") if hasattr(response, "headers") else None
     if raw is None:
         return None
     try:
         return int(raw)
     except (TypeError, ValueError):
+        pass
+    try:
+        from datetime import datetime, timezone
+        from email.utils import parsedate_to_datetime
+
+        when = parsedate_to_datetime(str(raw))
+        if when.tzinfo is None:
+            when = when.replace(tzinfo=timezone.utc)
+        return max(0, int((when - datetime.now(timezone.utc)).total_seconds()))
+    except (TypeError, ValueError, OverflowError):
         return None

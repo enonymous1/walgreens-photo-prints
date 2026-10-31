@@ -11,16 +11,16 @@ customer took the required terms action (``--accept-terms``).
 """
 
 import argparse
+import dataclasses
 import json
 import sys
 from dataclasses import asdict
 
+from ._version import __version__ as VERSION
 from .client import WalgreensClient
 from .config import Config, ConfigError
 from .errors import WalgreensApiError
 from .upload import build_upload_url, upload_image_for_credentials
-
-VERSION = "1.0.0"
 
 
 def _print_json(value):
@@ -97,32 +97,22 @@ def _add_config_args(parser):
 
 def _config_from_args(args):
     config = Config.from_env(env_file=args.env_file)
-    overrides = {}
-    if args.api_key is not None:
-        overrides["api_key"] = args.api_key
-    if args.aff_id is not None:
-        overrides["aff_id"] = args.aff_id
-    if args.base_url is not None:
-        overrides["base_url"] = args.base_url
-    if args.app_ver is not None:
-        overrides["app_ver"] = args.app_ver
-    if args.dev_inf is not None:
-        overrides["dev_inf"] = args.dev_inf
-    if args.platform is not None:
-        overrides["platform"] = args.platform
-    if args.timeout is not None:
-        overrides["timeout"] = args.timeout
-    if overrides:
-        config = Config(
-            api_key=overrides.get("api_key", config.api_key),
-            aff_id=overrides.get("aff_id", config.aff_id),
-            base_url=overrides.get("base_url", config.base_url),
-            platform=overrides.get("platform", config.platform),
-            app_ver=overrides.get("app_ver", config.app_ver),
-            dev_inf=overrides.get("dev_inf", config.dev_inf),
-            timeout=overrides.get("timeout", config.timeout),
+    overrides = {
+        field: value
+        for field, value in (
+            ("api_key", args.api_key),
+            ("aff_id", args.aff_id),
+            ("base_url", args.base_url),
+            ("app_ver", args.app_ver),
+            ("dev_inf", args.dev_inf),
+            ("platform", args.platform),
+            ("timeout", args.timeout),
         )
-    return config
+        if value is not None
+    }
+    # dataclasses.replace re-runs Config validation, and a future
+    # Config field is picked up here automatically.
+    return dataclasses.replace(config, **overrides) if overrides else config
 
 
 def build_parser():
@@ -191,16 +181,7 @@ def main(argv=None):
         with WalgreensClient(config) as client:
             if args.command == "creds":
                 result = client.fetch_upload_credentials()
-                # The cloud entries hold the raw SAS token; never print it.
-                _print_json(
-                    {
-                        "upload_limit": result.upload_limit,
-                        "template": result.template,
-                        "landing_url": result.landing_url,
-                        "sas_key_token": "***" if result.sas_key_token else None,
-                        "cloud_entries": len(result.cloud),
-                    }
-                )
+                _print_json(result.redacted_dict())
             elif args.command == "products":
                 _print_json(
                     [

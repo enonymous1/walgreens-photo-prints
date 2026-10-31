@@ -1,0 +1,44 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="920" height="560" viewBox="0 0 920 560" role="img" aria-label="Upload and order flow: fetch credentials, build an upload URL, upload the image, validate the coupon, find stores, submit the gated order, then poll its status">
+  <defs>
+    <marker id="arrow2" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+      <path d="M0,0 L0,6 L9,3 z" fill="#334155"/>
+    </marker>
+    <style>
+      .box { fill: #f1f5f9; stroke: #334155; stroke-width: 1.5; rx: 10; }
+      .gate { fill: #fef3c7; stroke: #92400e; stroke-width: 1.5; rx: 10; }
+      .title { font-family: sans-serif; font-size: 15px; font-weight: bold; fill: #0f172a; text-anchor: middle; }
+      .sub { font-family: sans-serif; font-size: 12px; fill: #475569; text-anchor: middle; }
+      .line { stroke: #334155; stroke-width: 1.5; marker-end: url(#arrow2); }
+      .side { font-family: sans-serif; font-size: 12px; fill: #b91c1c; }
+    </style>
+  </defs>
+  <rect class="box" x="260" y="10" width="400" height="52"/>
+  <text class="title" x="460" y="32">1. Fetch upload credentials</text>
+  <text class="sub" x="460" y="50">creds endpoint, SAS token redacted in output</text>
+  <line class="line" x1="460" y1="62" x2="460" y2="78"/>
+  <rect class="box" x="260" y="78" width="400" height="52"/>
+  <text class="title" x="460" y="100">2. Build upload URL</text>
+  <text class="sub" x="460" y="118">container, image name, signature</text>
+  <line class="line" x1="460" y1="130" x2="460" y2="146"/>
+  <rect class="box" x="260" y="146" width="400" height="52"/>
+  <text class="title" x="460" y="168">3. PUT image to cloud storage</text>
+  <text class="sub" x="460" y="186">BlockBlob, fresh request id</text>
+  <line class="line" x1="460" y1="198" x2="460" y2="214"/>
+  <rect class="box" x="260" y="214" width="400" height="52"/>
+  <text class="title" x="460" y="236">4. Validate coupon</text>
+  <text class="sub" x="460" y="254">only then add it to the order</text>
+  <line class="line" x1="460" y1="266" x2="460" y2="282"/>
+  <rect class="box" x="260" y="282" width="400" height="52"/>
+  <text class="title" x="460" y="304">5. Find stores</text>
+  <text class="sub" x="460" y="322">fresh promise time for every order</text>
+  <text class="side" x="680" y="310">No promise time: do not submit</text>
+  <line class="line" x1="460" y1="334" x2="460" y2="350"/>
+  <rect class="gate" x="260" y="350" width="400" height="52"/>
+  <text class="title" x="460" y="372">6. Submit order, gated</text>
+  <text class="sub" x="460" y="390">requires --confirm and --accept-terms</text>
+  <line class="line" x1="460" y1="402" x2="460" y2="418"/>
+  <rect class="box" x="260" y="418" width="400" height="52"/>
+  <text class="title" x="460" y="440">7. Poll order status</text>
+  <text class="sub" x="460" y="458">raw orderStatus string is authoritative</text>
+  <text class="side" x="680" y="446">HTTP 429: wait and re-run</text>
+</svg>

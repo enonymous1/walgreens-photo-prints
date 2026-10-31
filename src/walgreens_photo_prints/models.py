@@ -3,7 +3,9 @@
 The API returns JSON objects whose fields may be absent or null. These
 models keep the raw value when it is present, use ``None`` for a missing
 or null field, and never invent a value. Collections are returned in the
-order the API returned them; this package never sorts them.
+order the API returned them; this package never sorts them. That order
+is meaningful for stores in particular: the API's order is the vendor's
+ordering, and sorting it would change which store a caller picks first.
 
 Nullable-field filtering: list parsers drop only entries that are
 missing the one field that makes them usable (``productId`` for
@@ -21,7 +23,22 @@ def _as_str(value):
     return str(value)
 
 
+def _as_decimal(value):
+    if value is None or value == "":
+        return None
+    try:
+        return Decimal(str(value))
+    except InvalidOperation:
+        return None
+
+
 def _as_float(value):
+    if value is None or value == "":
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
     if value is None or value == "":
         return None
     try:
@@ -185,13 +202,29 @@ def parse_stores(payload):
 
 @dataclass(frozen=True)
 class UploadCredentials:
-    """Upload credentials from ``/api/photo/creds/v3``."""
+    """Upload credentials from ``/api/photo/creds/v3``.
+
+    The SAS token is a live credential. It is excluded from ``repr``
+    like the API key is in ``Config``, and ``asdict()`` must never be
+    used on this class because ``asdict`` ignores ``repr=False``.
+    Use :meth:`redacted_dict` for any serialised or printed view.
+    """
 
     upload_limit: int | None = None
     template: str | None = None
     landing_url: str | None = None
-    sas_key_token: str | None = None
-    cloud: list = field(default_factory=list)
+    sas_key_token: str | None = field(default=None, repr=False)
+    cloud: list = field(default_factory=list, repr=False)
+
+    def redacted_dict(self):
+        """A serialisable view of these credentials with no token in it."""
+        return {
+            "upload_limit": self.upload_limit,
+            "template": self.template,
+            "landing_url": self.landing_url,
+            "sas_key_token": "***" if self.sas_key_token else None,
+            "cloud_entries": len(self.cloud),
+        }
 
     @classmethod
     def from_dict(cls, data):
@@ -243,6 +276,25 @@ class CouponResult:
             return None
         return self.order_total_price - self.order_discount_price
 
+    @property
+    def total_as_decimal(self):
+        """Order total as a Decimal, or None when absent/unparseable."""
+        return _as_decimal(self.order_total_price)
+
+    @property
+    def discount_as_decimal(self):
+        """Order discount as a Decimal, or None when absent/unparseable."""
+        return _as_decimal(self.order_discount_price)
+
+    @property
+    def new_subtotal_decimal(self):
+        """Subtotal as a Decimal; prefer this over float ``new_subtotal`` for money."""
+        total = self.total_as_decimal
+        discount = self.discount_as_decimal
+        if total is None or discount is None:
+            return None
+        return total - discount
+
 
 @dataclass(frozen=True)
 class ImageDetail:
@@ -250,6 +302,10 @@ class ImageDetail:
 
     url: str
     qty: str = "1"
+
+    def __post_init__(self):
+        if not self.url or not str(self.url).strip():
+            raise ValueError("ImageDetail url must not be empty.")
 
     def to_payload(self):
         return {"qty": str(self.qty), "url": self.url}
@@ -263,6 +319,10 @@ class OrderProduct:
     image_details: list
     multi_image_quantity: str | None = None
 
+    def __post_init__(self):
+        if not self.product_id or not str(self.product_id).strip():
+            raise ValueError("OrderProduct product_id must not be empty.")
+
     def to_payload(self):
         payload = {
             "productId": str(self.product_id),
@@ -272,8 +332,13 @@ class OrderProduct:
             payload["multiImageQuantity"] = str(self.multi_image_quantity)
         return payload
 
+    def distinct_image_urls(self):
+        """Distinct uploaded-image URLs in this product line."""
+        return {str(image.url) for image in self.image_details}
+
     def distinct_image_count(self):
-        return len(self.image_details)
+        """Number of distinct uploaded-image URLs in this product line."""
+        return len(self.distinct_image_urls())
 
 
 @dataclass(frozen=True)
@@ -333,10 +398,17 @@ class OrderStatusEntry:
 
     @property
     def status_label(self):
-        """Label for the numeric code, or the raw status string."""
-        if self.code is not None and self.code in STATUS_CODE_LABELS:
-            return STATUS_CODE_LABELS[self.code]
-        return self.order_status
+        """Label for this order's status.
+
+        The raw ``orderStatus`` string is authoritative: code ``"2"``
+        alone is ambiguous ("Downloaded" vs "Received at Store"), so
+        it is only used as a fallback when the API gave no string.
+        """
+        if self.order_status:
+            return self.order_status
+        if self.code is not None:
+            return STATUS_CODE_LABELS.get(self.code)
+        return None
 
 
 def parse_order_statuses(payload):
